@@ -1,3 +1,5 @@
+"""Utilities for string"""
+
 
 def sbc_to_dbc(sbc):
     """Convert SBC case to DBC case"""
