@@ -80,6 +80,7 @@ def check_gt(img_folder: str):
         splits = f.split(".")
         if splits[-1].lower() not in msra_td500_exts:
             continue
+
         fpath = os.path.join(img_folder, f)
         img = cv2.imread(fpath)
         try:
@@ -108,86 +109,127 @@ def check_gt(img_folder: str):
             print(e)
             print("img: ", f)
             continue
+
         cv2.imshow(f, img)
         k = cv2.waitKey(0)
+
         if k == 27:     # Escape
             exit()
         else:
             cv2.destroyAllWindows()
 
 
-def line_fn(x1, y1, x2, y2):
+def line_func(x1, y1, x2, y2):
     a = (y1 - y2) / (x1 - x2)
     b = (y2 * x1 - y1 * x2) / (x1 - x2)
     return lambda x: a * x + b
 
 
-def anchor_ys(gt_pts, x, w=16):
-    x1, y1, x2, y2, x3, y3, x4, y4 = gt_pts
-    if x > max(x2, x3):
-        x -= w
-    if x1 < x4:
-        if x4 < x2:
-            if x <= x4:
-                y12 = line_fn(x1, y1, x2, y2)(x)
-                y34 = line_fn(x1, y1, x4, y4)(x)
-            elif x4 < x <= x2:
-                y12 = line_fn(x1, y1, x2, y2)(x)
-                y34 = line_fn(x4, y4, x3, y3)(x)
-            else:
-                y12 = line_fn(x2, y2, x3, y3)(x)
-                y34 = line_fn(x4, y4, x3, y3)(x)
-        else:
-            if x <= x2:
-                y12 = line_fn(x1, y1, x2, y2)(x)
-                y34 = line_fn(x1, y1, x4, y4)(x)
-            elif x2 < x <= x4:
-                y12 = line_fn(x2, y2, x3, y3)(x)
-                y34 = line_fn(x1, y1, x4, y4)(x)
-            else:
-                y12 = line_fn(x2, y2, x3, y3)(x)
-                y34 = line_fn(x4, y4, x3, y3)(x)
+def anchor_ys(gt_box, left, right):
+    x1, y1, x2, y2, x3, y3, x4, y4 = gt_box
 
-    elif x1 > x4:
-        if x1 < x3:
-            if x <= x1:
-                y12 = line_fn(x4, y4, x1, y1)(x)
-                y34 = line_fn(x4, y4, x3, y3)(x)
-            elif x1 < x <= x3:
-                y12 = line_fn(x1, y1, x2, y2)(x)
-                y34 = line_fn(x4, y4, x3, y3)(x)
+    if x1 <= x4:
+        if x4 < x2:
+            if left < x4:
+                if right <= x4:
+                    y12 = line_func(x1, y1, x2, y2)(right)
+                    y34 = line_func(x1, y1, x4, y4)(right)
+                elif right <= x2:
+                    y12 = line_func(x1, y1, x2, y2)(right)
+                    y34 = y4
+                else:
+                    y12 = y2
+                    y34 = y4
+            elif left < x2:
+                if right <= x2:
+                    y12 = line_func(x1, y1, x2, y2)(right)
+                else:
+                    y12 = y2
+                y34 = line_func(x4, y4, x3, y3)(left)
             else:
-                y12 = line_fn(x1, y1, x2, y2)(x)
-                y34 = line_fn(x3, y3, x2, y2)(x)
+                y12 = line_func(x2, y2, x3, y3)(left)
+                y34 = line_func(x4, y4, x3, y3)(left)
+
         else:
-            if x <= x3:
-                y12 = line_fn(x4, y4, x1, y1)(x)
-                y34 = line_fn(x4, y4, x3, y3)(x)
-            elif x3 < x <= x1:
-                y12 = line_fn(x4, y4, x1, y1)(x)
-                y34 = line_fn(x3, y3, x2, y2)(x)
+            if left < x2:
+                if right <= x2:
+                    y12 = line_func(x1, y1, x2, y2)(right)
+                    y34 = line_func(x1, y1, x4, y4)(right)
+                elif right <= x4:
+                    y12 = y2
+                    y34 = line_func(x1, y1, x4, y4)(right)
+                else:
+                    y12 = y2
+                    y34 = y4
+            elif left < x4:
+                y12 = line_func(x2, y2, x3, y3)(left)
+                if right <= x4:
+                    y34 = line_func(x1, y1, x4, y4)(right)
+                else:
+                    y34 = y4
             else:
-                y12 = line_fn(x1, y1, x2, y2)(x)
-                y34 = line_fn(x3, y3, x2, y2)(x)
-    else:
-        y12 = y1
-        y34 = y4
+                y12 = line_func(x2, y2, x3, y3)(left)
+                y34 = line_func(x4, y4, x3, y3)(left)
+
+    else:  # x1 > x4
+        if x1 < x3:
+            if left < x1:
+                if right <= x1:
+                    y12 = line_func(x4, y4, x1, y1)(right)
+                    y34 = line_func(x4, y4, x3, y3)(right)
+                elif right <= x3:
+                    y12 = y1
+                    y34 = line_func(x4, y4, x3, y3)(right)
+                else:
+                    y12 = y1
+                    y34 = y3
+            elif left < x3:
+                y12 = line_func(x1, y1, x2, y2)(left)
+                if right <= x3:
+                    y34 = line_func(x4, y4, x3, y3)(right)
+                else:
+                    y34 = y3
+            else:
+                y12 = line_func(x1, y1, x2, y2)(left)
+                y34 = line_func(x3, y3, x2, y2)(left)
+        else:
+            if left < x3:
+                if right <= x3:
+                    y12 = line_func(x4, y4, x1, y1)(right)
+                    y34 = line_func(x4, y4, x3, y3)(right)
+                elif right <= x1:
+                    y12 = line_func(x4, y4, x1, y1)(right)
+                    y34 = y3
+                else:
+                    y12 = y1
+                    y34 = y3
+            elif left < x1:
+                if right <= x1:
+                    y12 = line_func(x4, y4, x1, y1)(right)
+                else:
+                    y12 = y1
+                y34 = line_func(x3, y3, x2, y2)(left)
+            else:
+                y12 = line_func(x1, y1, x2, y2)(left)
+                y34 = line_func(x3, y3, x2, y2)(left)
 
     return y12, y34
 
 
-def gt2anchors(gt_pts, w=16):
-    x01, y01, x02, y02, x03, y03, x04, y04 = gt_pts
-    xmin = min(x01, x04)
-    n = math.ceil((max(x02, x03) - min(x01, x04)) / w)
+def gt2anchors(gt_box, w=16):
+    x01, y01, x02, y02, x03, y03, x04, y04 = gt_box
+    xmin = min(x01, x02, x03, x04)
+    xmax = max(x01, x02, x03, x04)
+    n = math.ceil((xmax - xmin) / w)
     anchors = []
     for i in range(n):
-        x1 = x4 = math.floor(xmin + i * w)
-        x2 = x3 = x1 + w
-        y1, y4 = anchor_ys(gt_pts, x1)
-        y2, y3 = anchor_ys(gt_pts, x2)
-        y1 = y2 = math.floor(min(y1, y2))
-        y3 = y4 = math.ceil(max(y3, y4))
+        left = xmin + i * w
+        right = left + w - 1
+        y12, y34 = anchor_ys(gt_box, left, right)
+        x1 = x4 = math.floor(left)
+        x2 = x3 = x1 + w - 1
+        y1 = y2 = math.floor(y12)
+        y3 = y4 = math.ceil(y34)
         anchors.append((x1, y1, x2, y2, x3, y3, x4, y4))
 
     return anchors
@@ -195,7 +237,7 @@ def gt2anchors(gt_pts, w=16):
 
 if __name__ == "__main__":
     source_folder = ""
-    target_folder = ""
-    get_targets(target_folder)
-    transform_msra_td500(source_folder, target_folder)
+    target_folder = "/home/mo/Datasets/ctpn"
+    # get_targets(target_folder)
+    # transform_msra_td500(source_folder, target_folder)
     check_gt(target_folder)
